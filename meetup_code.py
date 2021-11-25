@@ -2,6 +2,7 @@ import requests
 import pandas as pd, numpy as np
 from time import sleep
 import datetime
+from datetime import datetime as dt
 from sqlalchemy import create_engine
 
 dt = datetime.datetime.now()
@@ -15,25 +16,25 @@ def check_throttle(response):
         sleep(int(time))
 
 if __name__ == '__main__':
-    engine = create_engine("mysql+pymysql://{user}:{pw}@localhost/{db}"
-                           .format(user="root", pw="SG@1234", db="sample_check"))
+    engine = create_engine("mysql+pymysql://{user}:{pw}@database-1.cluster-ro-ct2brvwy8za8.us-east-1.rds.amazonaws.com/{db}"
+                           .format(user="admin", pw="d5Sj5U7lZqwNYsqRjhJI", db="datacollection"))
 
     conn = engine.connect()
     conn.execute("CREATE TABLE IF NOT EXISTS meetups_all_data (Ecosystem_City varchar(50),\
                  members varchar(10), group_id varchar(50),\
                 meetup_city varchar(20), country varchar(10), description MEDIUMTEXT,\
-                name varchar(100), who varchar(200));")
+                name varchar(100), created varchar(100), who varchar(200), run_date DATETIME);")
+
     # Read inputs
-    cities_df = pd.read_csv("updated_ecosystems.csv")
+    cities_df = pd.read_csv(r"/root/meetup_code/updated_ecosystems.csv",encoding='ISO-8859-1')
+    cities_df = cities_df.iloc[6: ,:]
+
     headers = {  # need token for authorization
         'Authorization': 'Bearer 2f3271bf6909accd62c4f1a13fed1cbd', 'Cache-Control': 'no-cache', "Pragma": "no-cache"
     }
 
-    df = pd.DataFrame(
-        columns=['Ecosystem_City', 'members', 'group_id', 'meetup_city', 'country', 'description', 'name', 'created',
-                 'who'])
-    locations = tuple(
-        zip(cities_df['Ecosystem'].tolist(), cities_df['Latitude'].tolist(), cities_df['Longitude'].tolist()))
+    df = pd.DataFrame( columns=['Ecosystem_City', 'members', 'group_id', 'meetup_city', 'country', 'description', 'name', 'created', 'who'])
+    locations = tuple(zip(cities_df['Ecosystem'].tolist(), cities_df['Latitude'].tolist(), cities_df['Longitude'].tolist()))
 
     cities = []
     group_id = []
@@ -77,6 +78,7 @@ if __name__ == '__main__':
                 description.append(dict['description']) if 'description' in dict else description.append(0)
                 group_id.append(dict['id']) if 'id' in dict else group_id.append(0)
                 who.append(dict['who']) if 'who' in dict else who.append(0)
+
             if len(response.json()) < 1:
                 break  # if there isn't a next page, break
 
@@ -93,7 +95,9 @@ if __name__ == '__main__':
     df['name'] = name
     df['description'] = description
     df['who'] = who
-
+    timestamp = dt.now()
+    df.insert(9,"run_date",timestamp,allow_duplicates= True)
+    
     df.to_sql('meetups_all_data', con=engine, if_exists='append', chunksize=1000, index=False)
     conn.close()
 
